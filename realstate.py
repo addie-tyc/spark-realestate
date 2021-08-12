@@ -68,9 +68,6 @@ final_df = df.filter(
                 ). \
         selectExpr('`縣市` as city', '`交易年月日` as date', '`鄉鎮市區` as district', '`建物型態` as building_state')
 
-final_df.show()
-print(final_df.count())
-
 
 # output
 df_json = final_df. \
