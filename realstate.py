@@ -26,10 +26,15 @@ df = spark.read.csv(files, header=True)
 
 
 # data cleaning functions
+
+# create character to number comparison sheet
 char_num = {'一': 1, '二': 2, '三': 3, '四': 4, '五': 5, 
             '六': 6, '七': 7, '八': 8, '九': 9, '十':10 }
 def word_to_number(s):
-    s = s[:-1]
+    '''
+    Change 'XXX層' to integer
+    '''
+    s = s[:-1] # remove "層" for each entry
     if '十' in s:
         if s[0] == '十':
             value = 0
@@ -43,6 +48,9 @@ def word_to_number(s):
         return char_num[s]
 
 def minguo_to_ad(s):
+    '''
+    Change Minguo year to AD year
+    '''
     if s.isdigit():
         year = int(s[:3])
         s = str(year + 1911) + s[3:]
@@ -55,11 +63,12 @@ minguo_to_ad_udf = F.udf(minguo_to_ad, DateType())
 
 # data cleaning
 df = df.filter(
-        (df['總樓層數'].endswith('層'))
+        (df['總樓層數'].endswith('層')) # Make sure there aren't dirty data
         ). \
         withColumn('總樓層數', word_to_number_udf(df['總樓層數'])). \
         withColumn('交易年月日', minguo_to_ad_udf(df['交易年月日'])). \
         withColumn('縣市', F.substring('土地位置建物門牌', 1, 3))
+        # Use column '土地位置建物門牌' to extract city information
 
 final_df = df.filter(
                 (df['主要用途'] == '住家用') &
@@ -67,15 +76,19 @@ final_df = df.filter(
                 (df['總樓層數'] >= 13)
                 ). \
         selectExpr('`縣市` as city', '`交易年月日` as date', '`鄉鎮市區` as district', '`建物型態` as building_state')
-
+        # Select columns we need
 
 # output
+
+# Combine 'district' and 'building_state' into column 'events'
+# and make data order by 'date' ascendingly
 df_json = final_df. \
     withColumn(
         'events', F.struct('district', 'building_state')
         ). \
     orderBy('date')
 
+# Group by 'city' and pack 'date' and 'events' into a list named 'time_slots'
 df_json = df_json.groupBy(
     'city'
     ).agg(
@@ -84,6 +97,7 @@ df_json = df_json.groupBy(
         ).alias('time_slots')
     )
 
+# Split data ramdomly, and save files locally with certain filename
 a, b = df_json.randomSplit([1.0, 1.0])
 for i, e in enumerate([a, b]):
     e.coalesce(1).write.json('result')
