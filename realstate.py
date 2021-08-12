@@ -46,6 +46,7 @@ def word_to_number(s):
             return value
     else:
         return char_num[s]
+word_to_number_udf = F.udf(word_to_number, IntegerType())
 
 def minguo_to_ad(s):
     '''
@@ -56,8 +57,6 @@ def minguo_to_ad(s):
         s = str(year + 1911) + s[3:]
         ad_date = datetime.strptime(s, '%Y%m%d').date()
         return ad_date
-
-word_to_number_udf = F.udf(word_to_number, IntegerType())
 minguo_to_ad_udf = F.udf(minguo_to_ad, DateType())
 
 
