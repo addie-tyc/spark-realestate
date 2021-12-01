@@ -132,3 +132,5 @@ dmypy.json
 *.ipynb
 *.csv
 *.json
+result
+raw_data
