@@ -1,6 +1,7 @@
+import os
 import requests
 from datetime import datetime
-import os
+from shutil import rmtree
 
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
@@ -9,11 +10,16 @@ from pyspark.sql.types import IntegerType, DateType
 
 # crawl
 files = []
+folder = 'raw_data'
 for alias in ['a', 'b', 'e', 'f', 'h']:
     fname = f'{alias}_lvr_land_a.csv'
+    full_fname = os.path.join(folder, fname)
+    if os.path.isfile(full_fname):
+        files.append(full_fname)
+        continue
     res = requests.get(f'https://plvr.land.moi.gov.tw//DownloadSeason?season=108S2&fileName={fname}')
-    open(fname, 'wb').write(res.content)
-    files.append(fname)
+    open(full_fname, 'wb').write(res.content)
+    files.append(full_fname)
 
 
 # spark
@@ -94,11 +100,16 @@ df_json = df_json.groupBy(
         F.collect_list(
             F.struct('date', 'events')
         ).alias('time_slots')
-    )
+    ).repartition(2, 'city')
 
 # Split data ramdomly, and save files locally with certain filename
-a, b = df_json.randomSplit([1.0, 1.0])
-for i, e in enumerate([a, b]):
-    e.coalesce(1).write.json('result')
-    os.system(f'cat result/part-*.json > result-part{i+1}.json')
-    os.system('rm -rf result')
+output_dir = 'result'
+if os.path.isdir(output_dir):
+    rmtree(output_dir)
+df_json.write.json(output_dir)
+# a, b = df_json.randomSplit([1.0, 1.0])
+
+for i in range(df_json.rdd.getNumPartitions()):
+    os.system(f'cat {output_dir}/part-0000{i}*.json > result-part{i+1}.json')
+
+os.system(f'rm -rf {output_dir}')
